@@ -1,0 +1,6 @@
+classes= 80
+train=/home/raid5/coco/trainvalno5k_server.txt
+valid=/home/raid5/coco/5k_server.txt
+names=data/coco.names
+backup=backup/
+eval=coco
