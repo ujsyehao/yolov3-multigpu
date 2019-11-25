@@ -24,6 +24,8 @@ If you want to use multi GPU train, you should modify these below:
 2. gt box越界错误
 fix gt box may cross boundary in utils/utils.py -> build_targets() function line 332
 
+3. 多卡读取weights
+
 
 ## TODO tricks:
 ### training tricks:
