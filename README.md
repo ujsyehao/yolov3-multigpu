@@ -14,14 +14,30 @@ If you want to use multi GPU train, you should modify these below:
 
 
 
-一些原来仓库中的修复:
+一些原来仓库问题修复:
 1. mAP计算
-原来仓库使用conf_thresh=0.001@IOU=0.5 mAP为53.6
+论文中是55.3, 原来仓库使用conf_thresh=0.001@IOU=0.5 mAP为53.6
 * 修改datasets.py中collate_fn(), 具体原因可查看https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/243 -> mAP为54.9
-* 修改utils.py中get_batch_statistics(), 具体原因可查看https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/233
+* 修改utils.py中get_batch_statistics(), 具体原因可查看https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/233 -> mAP为52.6
 * 原来仓库作者提供的coco2014 val 5k dataset和coco官网提供的5k val dataset不一致
-
-
 
 2. gt box越界错误
 fix gt box may cross boundary in utils/utils.py -> build_targets() function line 332
+
+
+
+
+TODO tricks:
+** training tricks:**
+* data augmentation
+* multi scale train finish
+* multi GPU train finish
+* label smooth
+* mix up
+* cosine lr 
+* group normalization deprecated
+
+** detection tricks:**
+* focal loss 
+* soft nms (not supported)
+* GIOU 
