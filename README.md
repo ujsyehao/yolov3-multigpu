@@ -28,8 +28,7 @@ fix gt box may cross boundary in utils/utils.py -> build_targets() function line
 
 
 ## TODO tricks:
-### training tricks:
-
+### training tricks
 * data augmentation
 * multi scale train finish
 * multi GPU train finish
@@ -37,8 +36,7 @@ fix gt box may cross boundary in utils/utils.py -> build_targets() function line
 * mix up
 * cosine lr 
 * group normalization deprecated
-
-### detection tricks:
+### detection tricks
 * focal loss 
 * soft nms (not supported)
 * GIOU 
