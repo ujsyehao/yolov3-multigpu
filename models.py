@@ -108,7 +108,7 @@ class YOLOLayer(nn.Module):
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCELoss()
         self.obj_scale = 1 # scale factor of has obj objectness_loss
-        self.noobj_scale = 100 # scale factor of no_obj objectness_loss
+        self.noobj_scale = 50 # scale factor of no_obj objectness_loss
         self.metrics = {}
         self.img_dim = img_dim
         self.grid_size = 0 
@@ -268,6 +268,10 @@ class YOLOLayer(nn.Module):
                                                                                    # TP + FN : all positive samples(obj_mask)
             recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
+            print (grid_size, 'x', grid_size, '-loss: ', to_cpu(total_loss).item(), ' coord loss: ', 
+                    to_cpu(loss_x).item() + to_cpu(loss_y).item() + to_cpu(loss_w).item() + to_cpu(loss_h).item(), 
+                    ' conf loss: ', to_cpu(loss_conf).item(), ' cls loss: ', to_cpu(loss_cls).item())
+
             self.metrics = {
                 "grid_size": grid_size,
                 "loss": to_cpu(total_loss).item(),
@@ -288,6 +292,8 @@ class YOLOLayer(nn.Module):
                 "conf_noobj": to_cpu(conf_noobj).item(),                
             }
 
+            #print (self.metrics)
+
             return output, total_loss
 
 
@@ -303,7 +309,7 @@ class Darknet(nn.Module):
         self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
 
     def forward(self, x, targets=None):
-        #print ('forward x: ', x.size())
+        #print ('forward x: ', x.size(), type(x), x.type(), x.is_cuda, x.device)
         #print ('forward targets: ', targets.size())
 
         img_dim = x.shape[2]
@@ -325,12 +331,19 @@ class Darknet(nn.Module):
             layer_outputs.append(x) # form yolov3 layer
         # [1, 507, 85], [1, 2028, 85], [1, 8112, 85] -> [1, 10647, 85]
         yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1)) # 1-dimension: number of pred boxes
+                                                          # move tensor to cpu -> for post-process
 
         # note: need modify when use multi-gpu train
-        loss_ = loss.type(torch.cuda.FloatTensor)
-        yolo_outputs_ =yolo_outputs.type(torch.cuda.FloatTensor) 
+        if loss == 0:
+            loss_ = loss
+        else:
+            loss_ = loss.type(torch.cuda.FloatTensor) # multi gpu train need cuda tensor
 
-        return yolo_outputs if targets is None else (loss_, yolo_outputs_)
+        #print ('yolo outputs', type(yolo_outputs), yolo_outputs.type(), yolo_outputs.is_cuda, yolo_outputs.device)
+        #yolo_outputs_ = type(torch.cuda.FloatTensor)
+        yolo_outputs_ = yolo_outputs.cuda()
+        #print ('yolo outputs', type(yolo_outputs_), yolo_outputs_.type(), yolo_outputs_.is_cuda, yolo_outputs_.device)
+        return yolo_outputs_ if targets is None else (loss_, yolo_outputs_)
 
     def load_darknet_weights(self, weights_path):
         # open the weight file

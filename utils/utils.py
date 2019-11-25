@@ -70,12 +70,12 @@ def get_batch_statistics(outputs, targets, iou_threshold):
         pred_scores = output[:, 4]
         pred_labels = output[:, -1]
 
-        # true_positives shape: (valid_boxes, ) valid_boxes w.r.t current batch-index 
+        # true_positives shape: (valid_boxes, ) valid_boxes w.r.t current batch-index predict boxes
         true_positives = np.zeros(pred_boxes.shape[0])
 
         # annotations shape: [gt_boxes, 5] gt_boxes w.r.t current batch-index / 5 is (class, x1, y1, x2, y2)
         annotations = targets[targets[:, 0] == sample_i][:, 1:]
-        # get target_labels: [gt_boxes]
+        # get target class labels: [gt_boxes]
         target_labels = annotations[:, 0] if len(annotations) else []
 
         if len(annotations):
@@ -98,8 +98,8 @@ def get_batch_statistics(outputs, targets, iou_threshold):
                 iou, box_index = bbox_iou(pred_box.unsqueeze(0), target_boxes).max(0) # iou size: [gt_boxes_number]
                                                                                       # box_index: best matched gt box index
                 # TP definition: predict class is correct && IOU > iou_threshold && conf > conf_thresh(in NMS)                                                                      
-                #if iou >= iou_threshold and box_index not in detected_boxes and pred_label == target_labels[box_index]:
-                if iou >= iou_threshold and box_index not in detected_boxes:
+                if iou >= iou_threshold and box_index not in detected_boxes and pred_label == target_labels[box_index]:
+                #if iou >= iou_threshold and box_index not in detected_boxes:
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
         batch_metrics.append([true_positives, pred_scores, pred_labels])
@@ -322,7 +322,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     b, target_labels = target[:, :2].long().t() # b: batch-size index
 
     # note: need modify batch-index: batch-index = batch-index % imgs_per_gpu
-    b = b % 10
+    b = b % 8
 
     gx, gy = gxy.t()
     gw, gh = gwh.t()

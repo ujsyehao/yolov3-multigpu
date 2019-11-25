@@ -139,6 +139,9 @@ class ListDataset(Dataset):
         # find max number of targets in one image
         max_targets = 0
         for i in range(len(targets)):
+            # exist no target
+            if targets[i] is None:
+                continue
             length_target = targets[i].size(0)
             if (max_targets < length_target):
                 max_targets = length_target
@@ -160,8 +163,8 @@ class ListDataset(Dataset):
                 
         #targets = [boxes for boxes in targets if boxes is not None]
         targets = [boxes for boxes in new_targets if boxes is not None]
-
         targets = torch.cat(targets, 0)
+
         # select new image size every 10 batch 
         if self.multiscale and self.batch_count % 10 == 0:
             self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
