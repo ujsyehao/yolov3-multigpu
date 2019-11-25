@@ -19,11 +19,7 @@ If you want to use multi GPU train, you should modify these below:
 原来仓库使用conf_thresh=0.001@IOU=0.5 mAP为53.6
 * 修改datasets.py中collate_fn(), 具体原因可查看https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/243 -> mAP为54.9
 * 修改utils.py中get_batch_statistics(), 具体原因可查看https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/233
-* 原来仓库作者提供的coco labels缺失了很多图片，
-
-fix target batch-index misorder in utils/datasets.py -> collate_fn() function line 162
-
-
+* 原来仓库作者提供的coco2014 val 5k dataset和coco官网提供的5k val dataset不一致
 
 
 
