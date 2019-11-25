@@ -14,7 +14,7 @@ If you want to use multi GPU train, you should modify these below:
 
 
 
-一些原来仓库问题修复:
+## 一些原来仓库问题修复:
 1. mAP计算
 论文中是55.3, 原来仓库使用conf_thresh=0.001@IOU=0.5 mAP为53.6
 * 修改datasets.py中collate_fn(), 具体原因可查看https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/243 -> mAP为54.9
@@ -25,10 +25,9 @@ If you want to use multi GPU train, you should modify these below:
 fix gt box may cross boundary in utils/utils.py -> build_targets() function line 332
 
 
+## TODO tricks:
+### training tricks:
 
-
-TODO tricks:
-** training tricks:**
 * data augmentation
 * multi scale train finish
 * multi GPU train finish
@@ -37,7 +36,7 @@ TODO tricks:
 * cosine lr 
 * group normalization deprecated
 
-** detection tricks:**
+### detection tricks:
 * focal loss 
 * soft nms (not supported)
 * GIOU 
