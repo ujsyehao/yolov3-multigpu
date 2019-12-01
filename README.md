@@ -26,6 +26,7 @@ fix gt box may cross boundary in utils/utils.py -> build_targets() function line
 
 3. 多卡读取weights
 
+４．多卡log信息
 
 ## TODO tricks:
 ### training tricks
