@@ -26,7 +26,7 @@ import torch.optim as optim
 def adjust_learning_rate(optimizer, epoch):
     # use warmup
     if epoch < 5:
-        lr = opt.lr * ((epoch + 1) / 2.)
+        lr = opt.lr * ((epoch + 1) / 5)
     else:
     # use cosine lr
         PI = 3.14159
@@ -68,8 +68,8 @@ if __name__ == "__main__":
     model = Darknet(opt.model_def).to(device)
     model.apply(weights_init_normal) # initialize weights
 
-    #model = nn.DataParallel(model, device_ids=[0,1,2,3,4,5,6,7])
-    model = nn.DataParallel(model, device_ids=[0,1])
+    model = nn.DataParallel(model, device_ids=[0,1,2,3,4,5,6,7])
+    #model = nn.DataParallel(model, device_ids=[0,1,2,3])
 
     # if specified we start from checkpoint
     if opt.pretrained_weights:
@@ -98,9 +98,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
     #optimizer =torch.optim.SGD(model.parameters(), lr=opt.lr, momentum=0.9, weight_decay=5e-5) # note: which can cause error
                                                                                                 # device aassert failure
-
     print (optimizer) 
-
 
     metrics = [
         "grid_size",
@@ -122,6 +120,10 @@ if __name__ == "__main__":
         "conf_noobj",
     ]
 
+    formats = {m: "%.2f" for m in metrics}
+    #formats["grid_size"] = "%2f"
+    #formats["cls_acc"] = "%.2f"
+
     for epoch in range(opt.epochs):
         # adjust learning rate
         adjust_learning_rate(optimizer, epoch)
@@ -135,7 +137,9 @@ if __name__ == "__main__":
 
             print ('imgs size: ', imgs.size())
             print ('targets size: ', targets.size())
-
+            for param_group in optimizer.param_groups:
+                print('learning rate: ', param_group['lr'])
+            
             loss, outputs = model(imgs, targets)
             # loss.backward(torch.Tensor([1]))
             # loss.backward()
@@ -147,40 +151,80 @@ if __name__ == "__main__":
                 optimizer.step()
                 optimizer.zero_grad()
 
-            log_str = "---- [epoch %d/%d, Batch %d/%d] ----" % (epoch, opt.epochs, batch_i, len(dataloader))
+            log_str = "---- [epoch %d/%d, Batch %d/%d] ----\n" % (epoch, opt.epochs, batch_i, len(dataloader))
+            metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.module.test_yolo_layers))]]]
+            metric_table1 = [["Metrics", *[f"YOLO Layer {i}" for i in range(3)]]]
 
-            metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.module.yolo_layers))]]]
+            #print ('sum yolo layers: ', len(model.module.test_yolo_layers)) # 3 yolo layers
 
-            #print ('debug log\n')
-            #print (model.module.yolo_layers.metrics)
+            # log test
+            min_grid_size = int(imgs.size(2) / 32)
+            medium_grid_size = int(imgs.size(2) / 16)
+            max_grid_size = int(imgs.size(2) / 8)
+            #print ('grid_size: ', min_grid_size, medium_grid_size, max_grid_size)
+
+            min_status = False
+            medium_status = False
+            max_status = False
 
             for i, metric in enumerate(metrics):
                 formats = {m: "%.2f" for m in metrics}
                 formats["grid_size"] = "%2d"
-                formats["cls_acc"] = "%.2f%%"
-                row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.module.yolo_layers]
-                #print (model.module.yolo_layers[0])
+                formats["cls_acc"] = "%.2f"
+                #print (model.module.test_yolo_layers[2].metrics)
+                row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.module.test_yolo_layers]    
                 metric_table += [[metric, *row_metrics]]
 
-                # tensorboard logging
-                tensorboard_log = []
-                for j, yolo in enumerate(model.module.yolo_layers):
-                    for name, metric in yolo.metrics.items():
-                        if name != "grid_size":
-                            tensorboard_log += [(f"{name}_{j+1}", metric)]
-                tensorboard_log += [("loss", loss.mean().item())]
-                #logger.list_of_scalars_summary(tensorboard_log, batches_done)
-            logger.list_of_scalars_summary(tensorboard_log, batches_done)
-            #log_str += AsciiTable(metric_table).table 
-            log_str += f"Total loss {loss.mean().item()}\n"
+            # modify metric_table
+            #print (type(metric_table), len(metric_table))
+            #print (metric_table[2][0], metric_table[2][-1])
 
+            gpu_number = len(model.module.test_yolo_layers) / 3.
+            # sum min_grid_size loss in log
+
+            for j, metric in enumerate(metrics):
+                j = j + 1
+                min = 0
+                medium = 0
+                max = 0
+                for i in range(len(model.module.test_yolo_layers)):
+                    i = i + 1
+                    #print ('debug: ', metric_table[1][i], min_grid_size)
+                    if int(metric_table[1][i]) == min_grid_size:
+                        min += float(metric_table[j][i])
+                        #print ('loss_min: ', metric_table[2][i])
+                    if int(metric_table[1][i]) == medium_grid_size:
+                        medium += float(metric_table[j][i])
+                    if int(metric_table[1][i]) == max_grid_size:
+                        max += float(metric_table[j][i])
+
+                min = round(min / gpu_number, 2)
+                medium = round(medium / gpu_number, 2)
+                max = round(max / gpu_number, 2)                   
+                metric_table1 += [[metric, min, medium, max]]
+
+            # update tensorboard log
+            tensorboard_log = []
+            for i in range(3):    
+                j = 0
+                for name, metric in model.module.test_yolo_layers[0].metrics.items():
+                    j += 1
+                    if name != "grid_size":
+                        tensorboard_log += [(f"{name}_{i+1}", metric_table1[j][i+1])]
+
+            tensorboard_log += [("loss", loss.mean().item())]
+            logger.list_of_scalars_summary(tensorboard_log, batches_done)
+
+
+            #logger.list_of_scalars_summary(tensorboard_log, batches_done)
+            log_str += AsciiTable(metric_table1).table 
+            log_str += f"\nTotal loss {loss.mean().item()}\n"
             print (log_str)
             model.module.seen += imgs.size(0) # batch_size
 
         if epoch % opt.checkpoint_interval_epoch == 0:
             torch.save(model.module.state_dict(), f"checkpoints/yolov3_epoch%d.pth" % epoch) # save single-gpu format
         
-
         if epoch % opt.evaluation_interval_epoch == 0:
             print ('\n------ Evaluating model-------')
             precision, recall, AP, f1, ap_class = evaluate(
@@ -207,4 +251,7 @@ if __name__ == "__main__":
             print (AsciiTable(ap_table).table)
             print (f"---- mAP {AP.mean()}")
 
+            # write mAP to log
+            file = open('./mAP.txt', 'a+')
+            file.write('epoch_' + str(epoch + 1) + ' ' + str(AP.mean()) + '\n')
 

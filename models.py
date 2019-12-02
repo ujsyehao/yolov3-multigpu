@@ -146,7 +146,7 @@ class YOLOLayer(nn.Module):
         # convert predictions
         # note: NCHW format -> grid_y, grid_x
         # nx255x13x13 -> nx3x85x13x13 -> nx3x13x13x85
-        # 85: x_ctr, y_ctr, tw, th, objectness, 80 class
+        # 85: tx_ctr, ty_ctr, tw, th, objectness, 80 class
         prediction = (
             x.view(num_samples, self.num_anchors, self.num_classes + 5, grid_size, grid_size)
             .permute(0, 1, 3, 4, 2)
@@ -154,9 +154,9 @@ class YOLOLayer(nn.Module):
         )
 
         # get and parse outputs
-        x = torch.sigmoid(prediction[..., 0]) # x_ctr range: (0, 1) 
+        x = torch.sigmoid(prediction[..., 0]) # tx_ctr range: (0, 1) 
                                               # format: [batch_size, anchors, grid_y, grid_x]
-        y = torch.sigmoid(prediction[..., 1]) # y_ctr range: (0, 1)
+        y = torch.sigmoid(prediction[..., 1]) # ty_ctr range: (0, 1)
         w = prediction[..., 2] # tw
         h = prediction[..., 3] # th
         pred_conf = torch.sigmoid(prediction[..., 4]) # objectness use sigmoid()
@@ -187,6 +187,7 @@ class YOLOLayer(nn.Module):
             return output, 0
         else:
             # calculate loss
+            # (tx, ty, tw, th): target offset
             iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = build_targets(
                 pred_boxes=pred_boxes, # normalize x_ctr, y_ctr, w, h
                 pred_cls=pred_cls,
@@ -214,8 +215,6 @@ class YOLOLayer(nn.Module):
             calculate postive samples loss: loc loss + cls loss + obj loss
             """
             # calculate loc loss
-            
-            
             loss_x = self.mse_loss(x[obj_mask], tx[obj_mask]) # choose positive predict box tx ang target tx*
                                                               # x size: [batch_size, anchors, grid_y, grid_x]
                                                               # obj_mask size: [batch_size, anchors, grid_y, grid_x]
@@ -268,9 +267,9 @@ class YOLOLayer(nn.Module):
                                                                                    # TP + FN : all positive samples(obj_mask)
             recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
-            print (grid_size, 'x', grid_size, '-loss: ', to_cpu(total_loss).item(), ' coord loss: ', 
-                    to_cpu(loss_x).item() + to_cpu(loss_y).item() + to_cpu(loss_w).item() + to_cpu(loss_h).item(), 
-                    ' conf loss: ', to_cpu(loss_conf).item(), ' cls loss: ', to_cpu(loss_cls).item())
+            #print (grid_size, 'x', grid_size, '-loss: ', to_cpu(total_loss).item(), ' coord loss: ', 
+            #        to_cpu(loss_x).item() + to_cpu(loss_y).item() + to_cpu(loss_w).item() + to_cpu(loss_h).item(), 
+            #        ' conf loss: ', to_cpu(loss_conf).item(), ' cls loss: ', to_cpu(loss_cls).item())
 
             self.metrics = {
                 "grid_size": grid_size,
@@ -293,6 +292,7 @@ class YOLOLayer(nn.Module):
             }
 
             #print (self.metrics)
+            self.noobj_scale = 100000
 
             return output, total_loss
 
@@ -304,6 +304,7 @@ class Darknet(nn.Module):
         self.module_defs = parse_model_config(config_path)
         self.hyperparams, self.module_list = create_modules(self.module_defs)
         self.yolo_layers = [layer[0] for layer in self.module_list if hasattr(layer[0], "metrics")]
+        self.test_yolo_layers = []
         self.img_size = img_size
         self.seen = 0
         self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
@@ -311,6 +312,9 @@ class Darknet(nn.Module):
     def forward(self, x, targets=None):
         #print ('forward x: ', x.size(), type(x), x.type(), x.is_cuda, x.device)
         #print ('forward targets: ', targets.size())
+
+        # clear list
+        self.test_yolo_layers.clear()
 
         img_dim = x.shape[2]
         loss = 0 # sum of 3 yolo layer loss
@@ -325,10 +329,18 @@ class Darknet(nn.Module):
                 layer_i = int(module_def["from"]) # ex: from -3
                 x = layer_outputs[-1] + layer_outputs[layer_i]
             elif module_def["type"] == "yolo":
+                self.test_yolo_layers.append(module[0])
                 x, layer_loss = module[0](x, targets, img_dim) # module[0]: yolo layer
                 loss += layer_loss
                 yolo_outputs.append(x)
+
             layer_outputs.append(x) # form yolov3 layer
+        
+
+        #print (self.yolo_layers[0].metrics) # not work
+        #print (self.test_yolo_layers[0].metrics)
+
+
         # [1, 507, 85], [1, 2028, 85], [1, 8112, 85] -> [1, 10647, 85]
         yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1)) # 1-dimension: number of pred boxes
                                                           # move tensor to cpu -> for post-process
@@ -341,9 +353,9 @@ class Darknet(nn.Module):
 
         #print ('yolo outputs', type(yolo_outputs), yolo_outputs.type(), yolo_outputs.is_cuda, yolo_outputs.device)
         #yolo_outputs_ = type(torch.cuda.FloatTensor)
-        yolo_outputs_ = yolo_outputs.cuda()
+        yolo_outputs_gpu = yolo_outputs.cuda()
         #print ('yolo outputs', type(yolo_outputs_), yolo_outputs_.type(), yolo_outputs_.is_cuda, yolo_outputs_.device)
-        return yolo_outputs_ if targets is None else (loss_, yolo_outputs_)
+        return yolo_outputs_gpu if targets is None else (loss_, yolo_outputs_gpu)
 
     def load_darknet_weights(self, weights_path):
         # open the weight file
