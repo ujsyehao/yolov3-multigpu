@@ -11,7 +11,8 @@ If you want to use multi GPU train, you should modify these below:
 * calculate loss sum from all GPUs in train.py -> line 121
 * modify log info in train.py -> line 130
 
-
+关于为何做此修改？可以参考https://github.com/ujsyehao/yolov3-multigpu/issues/8　
+大家跑之前一定要修改imgs_per_gpu在build_targets()函数中
 
 
 ## 原来仓库问题修复:
